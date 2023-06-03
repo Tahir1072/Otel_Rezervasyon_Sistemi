@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <unistd.h>
+#include <conio.h>
+
+#define MAX_ODA 1000
 
 struct CustomerInfo{
 	unsigned int id;
@@ -35,12 +39,29 @@ enum{
 	customer,
 	personel
 };
-int CheckRoomDetails(RoomInfo *rooms,int roomNumber);
+
+RoomInfo* GetRooms(int** size);
 RoomInfo* GetRooms();
+int CheckRoomDetails(RoomInfo *rooms,int roomNumber,int size);
 CustomerInfo FindCustomer(int id);
 void ReservationClear(RoomInfo *rooms,CustomerInfo customer);
 int CalculatePrice(RoomInfo *rooms,int roomNumber);
+void MenuCustomer();
+
+//Boyutu bilinen bir diziye ekleme iþlemi yapma.
+void Add(struct RoomInfo room,struct RoomInfo** array,int size){
+	if(size != 0 && size % 4 == 0){
+		*array = (struct RoomInfo*)realloc(*array,sizeof(struct RoomInfo) * (size + 4));
+		(*array)[size] = room;
+	}
+	else{
+		(*array)[size] = room;
+	}
+}
+
+
 void MenuPersonel() {
+	
 	int temp = 0;
 	printf("1-Yeni musteri girisi\n2-Dolu oda bilgileri goruntule\n3-Odalardan cikis yapma islemi\n");
 	scanf("%d", &temp);
@@ -55,7 +76,7 @@ void MenuPersonel() {
 			int j;
 			int dng;
 
-			fp = fopen("customerData.exe", "w+b");
+			fp = fopen("customerData.bin", "w+b");
 			if(fp == NULL) {
 				printf("\nFile can not open");
 				break;
@@ -70,7 +91,7 @@ void MenuPersonel() {
 					scanf("%s", &temp1.customerSurname);
 					printf("\nOda Numarasý :");
 					scanf("%d", &(temp1.roomNumber));
-					fp2 = fopen("RoomInfoData.exe", "w+b");
+					fp2 = fopen("RoomInfoData.bin", "w+b");
 
 					if(fp2 == NULL) {
 						printf("\nFile can not open!");
@@ -104,39 +125,27 @@ void MenuPersonel() {
 		}
 		case 2: {
 			// Case 2 için lokal deðiþkenler
-			FILE *fp1;
-			RoomInfo *rooms1;
-			int kontrol, k;
-
+			int roomNumber;
+			int *size = (int*)malloc(sizeof(int*));
 			printf("\nKontrol etmek istediginiz oda numarasini girin :");
-			scanf("%d", &kontrol);
-
-			fp1 = fopen("RoomInfoData.exe", "rb");
-			rooms1 = (RoomInfo*)calloc(4, sizeof(RoomInfo));
-			k = 1;
-
-			if(fp1 == NULL) {
-				printf("File can not open!");
-				break;
+			scanf("%d", &roomNumber);
+			RoomInfo* rooms = GetRooms(&size);
+			int sonuc = CheckRoomDetails(rooms, roomNumber,(*size));
+            if(sonuc == 0) printf("\nOda Bos");
+			else if(sonuc == -1) printf("\nHatali bilgi!");
+			else {
+				printf("\nOda Dolu");
 			}
-
-			while(fread(rooms1, sizeof(RoomInfo), 1, fp1) == 1) {
-				k++;
-				if(k % 4 == 0) {
-					rooms1 = (RoomInfo*)realloc(rooms1, k * sizeof(RoomInfo));
-				}
-			}
-			fclose(fp1);
-
-			CheckRoomDetails(rooms1, kontrol);
-			free(rooms1);
+			free(rooms);
 			break;
 		}
-		case 3:
-			//Simülasyon yapýlacak.
-			ReservationClear(GetRooms(), FindCustomer(2));
+		case 3:{
+			int id;
+			printf("Cýkýs yapilacak musteri no'sunu giriniz :");
+			scanf("%d",&id);
+			ReservationClear(GetRooms(), FindCustomer(id));
 			break;
-
+		}
 		default:
 			break;
 	}
@@ -144,7 +153,10 @@ void MenuPersonel() {
 
 
 CustomerInfo FindCustomer(int id){
-	FILE *fp = fopen("customerData.exe","r");
+	FILE *fp = fopen("customerData.bin","r");
+	if(fp == NULL){
+		printf("\nFile can not open!");
+	}
 	CustomerInfo customer;
 	while(fread(&customer,sizeof(customer),1,fp) == 1){
 		if(customer.id == id) break;
@@ -153,36 +165,73 @@ CustomerInfo FindCustomer(int id){
 	return customer;
 }
 
-RoomInfo* GetRooms(){
-	FILE *fp1 = fopen("RoomInfoData.exe","rb");
+RoomInfo* GetRooms(int** size){
+	FILE *fp1 = fopen("RoomInfoData.bin","rb");
 		RoomInfo *rooms = (RoomInfo*)calloc(4,sizeof(RoomInfo));
-		int k = 4;
+		RoomInfo room;
+		int i = 0;
 		if(fp1 == NULL){
 			printf("File can not open!");
 		}
-		while(fread(rooms,sizeof(RoomInfo),1,fp1)==1){
-			k++;
-			if(k % 4 == 0){
-				rooms = (RoomInfo*)realloc(rooms,k * sizeof(RoomInfo));
-			}
+		for(i = 0; fread(&room,sizeof(RoomInfo),1,fp1)==1;i++){
+			Add(room,&rooms,i);
 		}
+		
 		fclose(fp1);
+	*(*size) = i;
 	return rooms;
 }
+RoomInfo* GetRooms(){
+	FILE *fp1 = fopen("RoomInfoData.bin","rb");
+		RoomInfo *rooms = (RoomInfo*)calloc(4,sizeof(RoomInfo));
+		RoomInfo room;
+		
+		if(fp1 == NULL){
+			printf("File can not open!");
+		}
+		for(int i = 0; fread(&room,sizeof(RoomInfo),1,fp1)==1;i++){
+			Add(room,&rooms,i);
+		}
+		
+		fclose(fp1);
 
+	return rooms;
+}
+int CalculatePrice(RoomInfo *rooms, int roomNumber) {
+    
+    int i =0;
+	for(i = 0; rooms[i].roomNumber != roomNumber && i < MAX_ODA && rooms[i].id != NULL; i++);
+	
+    if(rooms[i].roomNumber == roomNumber) return rooms[i].price;
+    
+	printf("Yanlis bir oda numarasi girdiniz.");
+    return -1;
+}
 void MenuCustomer(){
 	int secim;
-	printf("1-Oda bilgisi sorgulama\n2-Fiyat bilgisi goruntuleme");
+	printf("1-Oda bilgisi sorgulama\n2-Fiyat bilgisi goruntuleme :");
+	scanf("%d",&secim);
 	switch(secim){
-		case 1:
-			//simüle edilecek
+		case 1:{
+			int roomNumber;
+			printf("Oda No'nuzu giriniz :");
+			scanf("%d",&roomNumber);
+			RoomInfo* rooms = GetRooms();
+			int i = 0;
+			for(i = 0;rooms[i].roomNumber != roomNumber;i++);
+			printf("Room Number : %d\nRoom Price : %f\nRoom State: %d",rooms[i].roomNumber,rooms[i].price,rooms[i].roomState);
+			free(rooms);
 			break;
-		case 2:
+		}
+		case 2:{
 			int temp;
 			printf("\nOda numarasý girin :");
 			scanf("%d",&temp);
-			printf("Fiyatý : %d",CalculatePrice(GetRooms(),temp));
+			RoomInfo* rooms = GetRooms();
+			printf("Fiyatý : %d",CalculatePrice(rooms,temp));
+			free(rooms);
 			break;
+		}
 		default:
 			break;
 	}
@@ -196,61 +245,48 @@ int computeDayDiff(DateTime enter,DateTime exit){
 	return diff;
 }
 
-int CalculatePrice(RoomInfo *rooms, int roomNumber) {
-    // NULL kontrolü yerine 0 kontrolü yapacaðýz.
-    for(int i = 0; rooms[i].id != 0; i++) {
-        if(rooms[i].roomNumber == roomNumber) {
-            return rooms[i].price;
-        }
-    }
-    printf("Yanlis bir oda numarasi girdiniz.");
+int CheckRoomDetails(RoomInfo *rooms,int roomNumber,int size){
+
+	int i = 0;
+	for(i = 0; rooms[i].roomNumber != roomNumber && i < size; i++);
+    if(rooms[i].roomNumber == roomNumber) return rooms[i].roomState;
+
     return -1;
-}
-
-
-int CheckRoomDetails(RoomInfo *rooms,int roomNumber){
-	
-	for(int i = 0; rooms[i].id != NULL; i++){
-		if(rooms[i].roomNumber == roomNumber){
-			return rooms[i].roomState;
-		}
-	}
-	printf("\nHatalý oda numarasý");
-	return -1;
 }
 
 void ReservationClear(RoomInfo *rooms,CustomerInfo customer){
     FILE *fp;
     int i = 0;
-	for(i = 0; rooms[i].id != NULL;i++){
+	for(i = 0; rooms[i].roomNumber != customer.roomNumber;i++);
 		if(rooms[i].roomNumber == customer.roomNumber){
 			rooms[i].roomState = 0;
 			//Exit time kodlanacak.
-			fp = fopen("RoomInfoData.exe","w+b");
+			fp = fopen("RoomInfoData.bin","w+b");
 			if(fp == NULL){
 				printf("File can not open!");
 			}
 			RoomInfo temp;
-			fseek(fp,(rooms[i].id -1) * sizeof(RoomInfo),SEEK_SET);
+			fseek(fp,(rooms[i].id - 1) * sizeof(RoomInfo),SEEK_SET);
 			fread(&temp,sizeof(RoomInfo),1,fp);
 			if(temp.id == rooms[i].id){
 				fwrite(&rooms[i],sizeof(RoomInfo),1,fp);
 			}
+			else{
+				printf("HATA KODU : 404");
+			}
 			fclose(fp);
-            break;
 		}
-	}
 }
 int main(){
 	while(true){
-		printf("Musteri islemleri icin 0'a,personel islemleri icin 1'e bas :");
+		printf("\nMusteri islemleri icin 0'a,personel islemleri icin 1'e bas :");
 	    int temp; scanf("%d",&temp);
 	    if(temp == 1){
 	    	char *tempDizi = (char*)calloc(100,sizeof(char));
 		    printf("Lutfen sifreninizi giriniz :");
 		    scanf("%s",tempDizi);
 		    FILE *fp;
-		    fp = fopen("PersonelInfo.txt","r");
+		    fp = fopen("Personels.txt","r");
 		    if(fp == NULL){
 		    	printf("File can not open!");
 		    	return -1;
@@ -260,6 +296,7 @@ int main(){
 			    printf("password : %s\n",tempPer.password);
 			    if(!strcmp(tempPer.password,tempDizi)){
 				   fclose(fp);
+				   fp = NULL;
 				   free(tempDizi);
 				   MenuPersonel();
 			    }
@@ -267,7 +304,7 @@ int main(){
 			if(fp != NULL){
 				fclose(fp);
 			    free(tempDizi);
-			    printf("Sifre yanlis");
+			    printf("\nSifre yanlis");
 			}
 			continue;
 		}
